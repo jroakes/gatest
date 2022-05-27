@@ -1,13 +1,13 @@
 from setuptools import setup
 
 setup(
-    name='ga-test',
+    name='gatest',
     version='1.0.0',
 
     url='https://github.com/SavannahCasto/ga-test',
     author='Author Name',
     author_email='author@gmail.com',
-    packages=['ga-test'],
+    packages=['gatest'],
 
     py_modules=['my_pip_package'],
 )
