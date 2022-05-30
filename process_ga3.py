@@ -1,19 +1,23 @@
-from ua import UniversalAnalytics, AnalyticsQuery, AnalyticsReport
+from gatest.ua import UniversalAnalytics, AnalyticsQuery, AnalyticsReport
 from google.cloud import bigquery
+import datetime
 import pandas as pd
 import json
+import os
 
-def get_ga3(to_project_id, to_dataset_id, to_table_name, ga3_view_id, pull_start_date, website_url, client, sql_query_template):
 
-    import datetime
-    sql = """SELECT MIN(date) FROM `{project_id}.{dataset_id}.{table_name}`""".format(project_id=to_project_id,
-                                                                                        dataset_id=to_dataset_id,
-                                                                                        table_name=to_table_name)
+def get_ga3(to_table_id, client, ga3_view_id, pull_start_date, website_url):
 
-    result = client.query(sql)
-    df2 = result.to_dataframe()
-    first_date = df2.iloc[0]['f0_']
-    pull_end_date = (first_date - datetime.timedelta(days=1))
+
+    def get_end_data():
+        sql = """SELECT MIN(date) FROM `{to_table_id}`""".format(to_table_id=to_table_id)
+
+        result = client.query(sql)
+        df2 = result.to_dataframe()
+        first_date = df2.iloc[0]['f0_']
+        pull_end_date = (first_date - datetime.timedelta(days=1))
+
+        return pull_end_date
 
     def get_report(ua, ga3_view_id, pull_start_date, pull_end_date, pageToken):
         dimensions = [
@@ -51,6 +55,7 @@ def get_ga3(to_project_id, to_dataset_id, to_table_name, ga3_view_id, pull_start
         response = query.get().raw
         return response
 
+
     def get_token(response):
         for report in response.get('reports', []):
             columnHeader = report.get('columnHeader', {})
@@ -59,6 +64,7 @@ def get_ga3(to_project_id, to_dataset_id, to_table_name, ga3_view_id, pull_start
                     {}).get('metricHeaderEntries', [])
             pageToken = report.get('nextPageToken', None)
         return pageToken
+
 
     def dict_transfer(response, mylist):
         for report in response.get('reports', []):
@@ -83,26 +89,19 @@ def get_ga3(to_project_id, to_dataset_id, to_table_name, ga3_view_id, pull_start
                         else:
                             dict[metric.get('name')] = int(value)
                 mylist.append(dict)
+    
 
-    SCOPES = [
-    "https://www.googleapis.com/auth/analytics.readonly"
-    ]
+    ua = UniversalAnalytics('/content/service.json')
+    pull_end_date = get_end_data()
 
-    auth_manager = GoogleAuthManager(SCOPES)
-
-    ua = UniversalAnalytics(auth_manager)
-
-    response = get_report(ua, ga3_view_id, pull_start_date, pull_end_date, "0")
     mylist = []
-    pageToken = get_token(response)
-    dict_transfer(response, mylist)
+    pageToken = "0"
 
     while pageToken != None:
         response = get_report(ua, ga3_view_id, pull_start_date, pull_end_date, pageToken)
         pageToken = get_token(response)
         dict_transfer(response, mylist)
-
-    if pageToken == None:
+    else:
         print("GA3 data download complete")
 
     print("Cleaning up data...")
@@ -134,6 +133,8 @@ def get_ga3(to_project_id, to_dataset_id, to_table_name, ga3_view_id, pull_start
     df = df[order.keys()].rename(columns=order)
 
     print("Uploading to BigQuery")
+
+
     job_config = bigquery.LoadJobConfig(
     write_disposition="WRITE_APPEND",
     schema=[
