@@ -1,15 +1,19 @@
+import os
 import datetime
 import re
 from typing import Union, List, Tuple
 
 import googleapiclient.discovery
+import google.auth
 
-import auth as auth
+
 
 
 class UniversalAnalytics:
-    def __init__(self, auth_manager: auth.GoogleAuthManager):
-        self.auth_manager = auth_manager
+    def __init__(self, service_account_file: str,
+                       project_name: str = None):
+        self.service_account_file = service_account_file
+        self.project_name = project_name
 
     @property
     def service(self) -> googleapiclient.discovery.Resource:
@@ -22,8 +26,23 @@ class UniversalAnalytics:
         return googleapiclient.discovery.build(
             'analyticsreporting',
             'v4',
-            credentials=self.auth_manager.authorize(),
+            credentials=self.get_service_account_credentials(),
             cache_discovery=False)
+
+
+    def get_service_account_credentials(self):
+
+        SCOPES = [
+            "https://www.googleapis.com/auth/analytics.readonly",
+          ]
+        cred_kwargs = {"scopes": SCOPES}
+        if self.project_name:
+          cred_kwargs["quota_project_id"] = self.project_name
+          
+        credentials, _ = google.auth.load_credentials_from_file( self.service_account_file or os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'),
+                        **cred_kwargs
+                      )
+        return credentials
 
     def query(self, view_id: str) -> 'AnalyticsQuery':
         return AnalyticsQuery(self, view_id)
